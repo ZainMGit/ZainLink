@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ZainLink - Login</title>
+  <style>
+    body {
+      background: #f3f4f6;
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      width: 320px;
+      text-align: center;
+    }
+
+    input {
+      width: 90%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+
+    button {
+      padding: 10px 15px;
+      background-color: #4f46e5;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      width: 100%;
+      font-weight: bold;
+    }
+
+    .toggle {
+      margin-top: 12px;
+      font-size: 0.9rem;
+      color: #555;
+      cursor: pointer;
+    }
+
+    #message {
+      margin-top: 10px;
+      color: #d32f2f;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+<div id="user-info" style="position: absolute; top: 20px; left: 20px; font-weight: bold;"></div>
+  <div class="container">
+    <h2 id="form-title">Login to ZainLink</h2>
+    <input type="text" id="username" placeholder="Username" required />
+    <input type="password" id="password" placeholder="Password" required />
+    <button onclick="submitForm()">Login</button>
+    <div class="toggle" onclick="toggleMode()">Don’t have an account? Sign up</div>
+    <div id="message"></div>
+  </div>
+
+  <script>
+    let mode = "login"; // can be 'login' or 'signup'
+
+    function toggleMode() {
+      mode = mode === "login" ? "signup" : "login";
+      document.querySelector("button").textContent = mode === "login" ? "Login" : "Sign Up";
+      document.getElementById("form-title").textContent = mode === "login" ? "Login to ZainLink" : "Sign Up for ZainLink";
+      document.querySelector(".toggle").textContent = mode === "login"
+        ? "Don’t have an account? Sign up"
+        : "Already have an account? Login";
+      document.getElementById("message").textContent = "";
+    }
+
+    async function submitForm() {
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value.trim();
+      const message = document.getElementById("message");
+
+      if (!username || !password) {
+        message.textContent = "Please fill in both fields.";
+        return;
+      }
+
+      const endpoint = mode === "login" ? "/login" : "/signup";
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        message.style.color = "green";
+        message.textContent = "Success! Redirecting...";
+        setTimeout(() => {
+          window.location.href = "/dashboard";
+        }, 1000);
+      } else {
+        message.style.color = "#d32f2f";
+        message.textContent = data.error || "Something went wrong.";
+      }
+    }
+    async function fetchUser() {
+    try {
+      const res = await fetch("/api/user", { credentials: "include" });
+      if (res.ok) {
+        const data = await res.json();
+        document.getElementById("user-info").innerText = `Logged in as: ${data.username}`;
+      }
+    } catch (err) {
+      console.error("Failed to fetch user info", err);
+    }
+  }
+
+  fetchUser();
+  </script>
+</body>
+</html>

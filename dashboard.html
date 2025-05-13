@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ZainLink Dashboard</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f5f7fa;
+      padding: 40px;
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      box-shadow: 0 0 8px rgba(0,0,0,0.1);
+    }
+
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #eee;
+    }
+
+    button {
+      background-color: #ef4444;
+      color: white;
+      border: none;
+      padding: 6px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .logout {
+      position: absolute;
+      top: 20px;
+      right: 30px;
+      background-color: #4f46e5;
+    }
+  </style>
+</head>
+<body>
+  <div style="position: absolute; top: 20px; right: 30px;">
+  <button onclick="window.location.href='/'" style="margin-right: 10px; background-color: #10b981; color: white; padding: 6px 12px; border: none; border-radius: 8px;">
+    Create Links
+  </button>
+  <button onclick="window.location.href='/logout'" style="background-color: #4f46e5; color: white; padding: 6px 12px; border: none; border-radius: 8px;">
+    Logout
+  </button>
+</div>
+
+  <h2>Welcome to Your ZainLink Dashboard</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Short</th>
+        <th>Original URL</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody id="linkTable">
+      <!-- Rows will be inserted by JS -->
+    </tbody>
+  </table>
+
+  <script>
+    async function fetchLinks() {
+      const res = await fetch('/api/links');
+      const data = await res.json();
+      const table = document.getElementById('linkTable');
+      table.innerHTML = "";
+
+      if (data.links.length === 0) {
+        table.innerHTML = "<tr><td colspan='3'>No links yet.</td></tr>";
+        return;
+      }
+
+      data.links.forEach(link => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td><a href="/${link.short}" target="_blank">${link.short}</a></td>
+          <td>${link.original}</td>
+          <td><button onclick="deleteLink('${link.short}')">Delete</button></td>
+        `;
+        table.appendChild(row);
+      });
+    }
+
+    async function deleteLink(short) {
+      await fetch(`/delete/${short}`, { method: "POST" });
+      fetchLinks();
+    }
+
+    fetchLinks();
+  </script>
+</body>
+</html>

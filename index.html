@@ -3,107 +3,176 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ZainLink - URL Shortener</title>
+  <title>ZainLink</title>
   <style>
     body {
-      font-family: 'Segoe UI', sans-serif;
-      background: #f5f7fa;
+      font-family: Arial, sans-serif;
+      background-color: #f6f8fb;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 100vh;
-      flex-direction: column;
+      min-height: 100vh;
+      margin: 0;
     }
-
+    h1 {
+      margin-bottom: 1rem;
+    }
     form {
       background: white;
-      padding: 20px;
+      padding: 1.5rem;
       border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
       display: flex;
-      gap: 10px;
+      gap: 0.5rem;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
     }
-
-    input[type="url"], button {
-      padding: 10px;
-      font-size: 1rem;
-      border-radius: 8px;
-    }
-    input[type="text"] {
-  width: 300px; /* Adjust as needed */
-  padding: 10px;
-  border-radius: 8px;
-  border: 1px solid #ccc;
-  font-size: 1rem;
-}
-
-
-    input[type="url"] {
+    input {
+      padding: 0.8rem;
       border: 1px solid #ccc;
-      width: 300px;
+      border-radius: 8px;
+      font-size: 1rem;
+      width: 260px;
     }
-
     button {
-      background-color: #4f46e5;
+      padding: 0.8rem 1.2rem;
+      background-color: #5a45ef;
       color: white;
       border: none;
-      cursor: pointer;
-    }
-
-    #result {
-      margin-top: 20px;
-      padding: 12px 16px;
       border-radius: 8px;
-      background: #e0f7fa;
-      color: #0277bd;
-      display: none;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    #result {
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      max-width: 500px;
+    }
+    .success {
+      background-color: #e6ffed;
+      color: #1a7f37;
+    }
+    .error {
+      background-color: #e6f7ff;
+      color: #0077b6;
+    }
+    .top-right {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      display: flex;
+      gap: 1rem;
+    }
+    .top-right a {
+      background-color: #5a45ef;
+      color: white;
+      padding: 0.6rem 1rem;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: bold;
+    }
+    #user-info {
+      margin-top: 1rem;
+      font-weight: bold;
     }
   </style>
 </head>
 <body>
-    <button onclick="window.location.href='/auth'" style="position: absolute; top: 20px; right: 20px; background-color: #4f46e5; color:white; padding: 10px 15px; border: none; border-radius: 8px;">
-  Login / Signup
-</button>
+  <div class="top-right">
+    <a id="dashboard-link" href="/dashboard" style="display: none">Dashboard</a>
+    <a id="auth-link" href="/auth">Login / Signup</a>
+  </div>
 
+  <div id="user-info"></div>
   <h1>ZainLink</h1>
-<form id="shorten-form">
-  <input type="url" name="original_url" placeholder="Paste your URL..." required />
-  <input type="text" name="custom_alias" placeholder="Custom short code (optional)" />
-  <button type="submit">Shorten</button>
-</form>
-<div id="result"></div>
 
+  <form id="shortenForm">
+    <input type="text" id="original" placeholder="Paste your URL..." required />
+    <input type="text" id="custom" placeholder="Custom short code (optional)" />
+    <button type="submit">Shorten</button>
+  </form>
+
+  <div id="result" style="display: none;"></div>
 
   <script>
-   
-  document.getElementById("shorten-form").onsubmit = async (e) => {
-    e.preventDefault();
-    const url = e.target.original_url.value;
-    const alias = e.target.custom_alias.value;
-    const resultBox = document.getElementById("result");
+    document.getElementById("shortenForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
 
-    try {
-      const res = await fetch("http://localhost:5000/shorten", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, custom_alias: alias })
-      });
+      const original = document.getElementById("original").value.trim();
+      const custom = document.getElementById("custom").value.trim();
+      const resultBox = document.getElementById("result");
 
-      const data = await res.json();
-      if (res.ok) {
-        const shortLink = `http://localhost:5000/${data.short}`;
-        resultBox.style.display = 'block';
-        resultBox.innerHTML = `Your short URL: <a href="${shortLink}" target="_blank">${shortLink}</a>`;
-      } else {
-        resultBox.style.display = 'block';
-        resultBox.innerText = `Error: ${data.error || "Could not shorten URL."}`;
+      resultBox.style.display = "none";
+      resultBox.className = "";
+      resultBox.innerText = "";
+
+      try {
+        const res = await fetch("/shorten", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ original, custom })
+        });
+
+        const contentType = res.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+          throw new Error("You may not be logged in. Please log in first.");
+        }
+
+        const data = await res.json();
+
+        if (res.ok) {
+          const shortUrl = `${window.location.origin}/${data.short}`;
+          resultBox.className = "success";
+          resultBox.innerHTML = `Shortened link: <a href="${shortUrl}" target="_blank">${shortUrl}</a>`;
+        } else {
+          resultBox.className = "error";
+          resultBox.innerText = `Error: ${data.error || "Something went wrong"}`;
+        }
+      } catch (err) {
+        resultBox.className = "error";
+        resultBox.innerText = `Failed to shorten URL: ${err.message}`;
       }
-    } catch (err) {
-      resultBox.style.display = 'block';
-      resultBox.innerText = `Failed to shorten URL: ${err.message}`;
+
+      resultBox.style.display = "block";
+    });
+
+    async function fetchUser() {
+      try {
+        const res = await fetch("/api/user", { credentials: "include" });
+        if (res.ok) {
+          const data = await res.json();
+          document.getElementById("user-info").innerText = `Logged in as: ${data.username}`;
+          document.getElementById("dashboard-link").style.display = "inline-block";
+          document.getElementById("auth-link").innerText = "Logout";
+          document.getElementById("auth-link").href = "/logout";
+        } else {
+          console.warn("Not logged in");
+        }
+      } catch (err) {
+        console.error("Error fetching user", err);
+      }
     }
-  };
-</script>
+
+    fetchUser();
+    document.getElementById("logout-btn").addEventListener("click", async function (e) {
+  e.preventDefault();
+  try {
+    const res = await fetch("/logout", {
+      method: "GET",
+      credentials: "include"
+    });
+    if (res.ok) {
+      window.location.reload(); // Reload to reset UI and session state
+    } else {
+      alert("Logout failed.");
+    }
+  } catch (err) {
+    console.error("Logout error:", err);
+    alert("Logout failed.");
+  }
+});
 
   </script>
 </body>
