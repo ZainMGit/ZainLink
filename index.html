@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ZainLink - URL Shortener</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f5f7fa;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      flex-direction: column;
+    }
+
+    form {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      display: flex;
+      gap: 10px;
+    }
+
+    input[type="url"], button {
+      padding: 10px;
+      font-size: 1rem;
+      border-radius: 8px;
+    }
+    input[type="text"] {
+  width: 300px; /* Adjust as needed */
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  font-size: 1rem;
+}
+
+
+    input[type="url"] {
+      border: 1px solid #ccc;
+      width: 300px;
+    }
+
+    button {
+      background-color: #4f46e5;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+
+    #result {
+      margin-top: 20px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      background: #e0f7fa;
+      color: #0277bd;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+    <button onclick="window.location.href='/auth'" style="position: absolute; top: 20px; right: 20px; background-color: #4f46e5; color:white; padding: 10px 15px; border: none; border-radius: 8px;">
+  Login / Signup
+</button>
+
+  <h1>ZainLink</h1>
+<form id="shorten-form">
+  <input type="url" name="original_url" placeholder="Paste your URL..." required />
+  <input type="text" name="custom_alias" placeholder="Custom short code (optional)" />
+  <button type="submit">Shorten</button>
+</form>
+<div id="result"></div>
+
+
+  <script>
+   
+  document.getElementById("shorten-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const url = e.target.original_url.value;
+    const alias = e.target.custom_alias.value;
+    const resultBox = document.getElementById("result");
+
+    try {
+      const res = await fetch("http://localhost:5000/shorten", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, custom_alias: alias })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        const shortLink = `http://localhost:5000/${data.short}`;
+        resultBox.style.display = 'block';
+        resultBox.innerHTML = `Your short URL: <a href="${shortLink}" target="_blank">${shortLink}</a>`;
+      } else {
+        resultBox.style.display = 'block';
+        resultBox.innerText = `Error: ${data.error || "Could not shorten URL."}`;
+      }
+    } catch (err) {
+      resultBox.style.display = 'block';
+      resultBox.innerText = `Failed to shorten URL: ${err.message}`;
+    }
+  };
+</script>
+
+  </script>
+</body>
+</html>
