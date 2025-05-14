@@ -15,9 +15,11 @@
       min-height: 100vh;
       margin: 0;
     }
+
     h1 {
       margin-bottom: 1rem;
     }
+
     form {
       background: white;
       padding: 1.5rem;
@@ -26,6 +28,7 @@
       gap: 0.5rem;
       box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
     }
+
     input {
       padding: 0.8rem;
       border: 1px solid #ccc;
@@ -33,6 +36,7 @@
       font-size: 1rem;
       width: 260px;
     }
+
     button {
       padding: 0.8rem 1.2rem;
       background-color: #5a45ef;
@@ -42,6 +46,7 @@
       cursor: pointer;
       font-weight: bold;
     }
+
     #result {
       margin-top: 1rem;
       padding: 1rem;
@@ -49,21 +54,25 @@
       font-size: 0.95rem;
       max-width: 500px;
     }
+
     .success {
       background-color: #e6ffed;
       color: #1a7f37;
     }
+
     .error {
       background-color: #e6f7ff;
       color: #0077b6;
     }
+
     .top-right {
       position: absolute;
       top: 1rem;
       right: 1rem;
       display: flex;
-      gap: 1rem;
+      gap: 0.5rem;
     }
+
     .top-right a {
       background-color: #5a45ef;
       color: white;
@@ -72,19 +81,16 @@
       border-radius: 8px;
       font-weight: bold;
     }
-    #user-info {
-      margin-top: 1rem;
-      font-weight: bold;
-    }
   </style>
 </head>
 <body>
   <div class="top-right">
-    <a id="dashboard-link" href="/dashboard" style="display: none">Dashboard</a>
-    <a id="auth-link" href="/auth">Login / Signup</a>
+    <a href="/auth" id="login-btn">Login / Signup</a>
+    <a href="/dashboard" id="dashboard-btn" style="display: none;">Dashboard</a>
+    <a href="#" id="logout-btn" style="display: none;">Logout</a>
   </div>
 
-  <div id="user-info"></div>
+  <div id="user-info" style="margin-top: 1rem; font-weight: bold;"></div>
   <h1>ZainLink</h1>
 
   <form id="shortenForm">
@@ -110,7 +116,9 @@
       try {
         const res = await fetch("/shorten", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json"
+          },
           credentials: "include",
           body: JSON.stringify({ original, custom })
         });
@@ -144,9 +152,9 @@
         if (res.ok) {
           const data = await res.json();
           document.getElementById("user-info").innerText = `Logged in as: ${data.username}`;
-          document.getElementById("dashboard-link").style.display = "inline-block";
-          document.getElementById("auth-link").innerText = "Logout";
-          document.getElementById("auth-link").href = "/logout";
+          document.getElementById("login-btn").style.display = "none";
+          document.getElementById("logout-btn").style.display = "inline-block";
+          document.getElementById("dashboard-btn").style.display = "inline-block";
         } else {
           console.warn("Not logged in");
         }
@@ -155,25 +163,25 @@
       }
     }
 
-    fetchUser();
     document.getElementById("logout-btn").addEventListener("click", async function (e) {
-  e.preventDefault();
-  try {
-    const res = await fetch("/logout", {
-      method: "GET",
-      credentials: "include"
+      e.preventDefault();
+      try {
+        const res = await fetch("/logout", {
+          method: "GET",
+          credentials: "include"
+        });
+        if (res.ok) {
+          window.location.href = "/";
+        } else {
+          alert("Logout failed.");
+        }
+      } catch (err) {
+        console.error("Logout error:", err);
+        alert("Logout failed.");
+      }
     });
-    if (res.ok) {
-      window.location.reload(); // Reload to reset UI and session state
-    } else {
-      alert("Logout failed.");
-    }
-  } catch (err) {
-    console.error("Logout error:", err);
-    alert("Logout failed.");
-  }
-});
 
+    fetchUser();
   </script>
 </body>
 </html>
