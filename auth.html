@@ -2,131 +2,137 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ZainLink Auth</title>
   <style>
     body {
+      margin: 0;
       font-family: Arial, sans-serif;
-      background-color: #f7f9fc;
+      background-color: #f5f7fa;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .container {
+      background: white;
+      padding: 2rem;
+      border-radius: 16px;
+      box-shadow: 0 0 24px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      max-width: 400px;
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    .input-wrapper {
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      margin: 0;
     }
-
-    h2 {
-      margin-bottom: 1rem;
-    }
-
-    .form-box {
-      background: white;
-      padding: 1.5rem;
-      border-radius: 12px;
-      box-shadow: 0 0 20px rgba(0,0,0,0.1);
-      margin: 1rem;
-      width: 300px;
-    }
-
-    input {
+    input[type="email"], input[type="password"], input[type="text"] {
       width: 100%;
-      padding: 0.8rem;
+      max-width: 300px;
+      padding: 0.75rem;
       margin-bottom: 1rem;
       border: 1px solid #ccc;
       border-radius: 8px;
       font-size: 1rem;
     }
-
     button {
       width: 100%;
-      padding: 0.8rem;
-      background-color: #5a45ef;
+      max-width: 300px;
+      padding: 0.75rem;
+      background-color: #5b3df0;
       color: white;
       border: none;
       border-radius: 8px;
       font-weight: bold;
+      font-size: 1rem;
       cursor: pointer;
+      transition: background-color 0.3s;
     }
-
-    .switch {
-      margin-top: 1rem;
-      font-size: 0.9rem;
-      color: #333;
+    button:hover {
+      background-color: #452bd4;
+    }
+    .toggle {
       text-align: center;
+      margin-top: 1rem;
     }
-
-    .switch a {
-      color: #5a45ef;
-      cursor: pointer;
-      text-decoration: underline;
+    .toggle a {
+      color: #5b3df0;
+      text-decoration: none;
+      font-weight: bold;
     }
   </style>
 </head>
 <body>
-  <div class="form-box" id="loginForm">
-    <h2>Login</h2>
-    <input type="email" id="loginEmail" placeholder="Email" required />
-    <input type="password" id="loginPassword" placeholder="Password" required />
-    <button onclick="login()">Login</button>
-    <div class="switch">Don't have an account? <a onclick="toggleForms()">Sign up</a></div>
-  </div>
-
-  <div class="form-box" id="signupForm" style="display: none;">
-    <h2>Signup</h2>
-    <input type="text" id="signupUsername" placeholder="Username" required />
-    <input type="email" id="signupEmail" placeholder="Email" required />
-    <input type="password" id="signupPassword" placeholder="Password" required />
-    <button onclick="signup()">Sign Up</button>
-    <div class="switch">Already have an account? <a onclick="toggleForms()">Log in</a></div>
+  <div class="container" id="auth-container">
+    <h2 id="form-title">Login</h2>
+    <div class="input-wrapper">
+      <input type="email" id="email" placeholder="Email" />
+      <input type="password" id="password" placeholder="Password" />
+      <input type="text" id="username" placeholder="Username" style="display:none" />
+      <button id="submit-btn">Login</button>
+    </div>
+    <div class="toggle">
+      <span id="toggle-text">Don't have an account? <a href="#" id="toggle-link">Sign up</a></span>
+    </div>
   </div>
 
   <script>
-    function toggleForms() {
-      const loginForm = document.getElementById("loginForm");
-      const signupForm = document.getElementById("signupForm");
-      loginForm.style.display = loginForm.style.display === "none" ? "block" : "none";
-      signupForm.style.display = signupForm.style.display === "none" ? "block" : "none";
-    }
+    let isLogin = true;
 
-    async function login() {
-      const email = document.getElementById("loginEmail").value.trim();
-      const password = document.getElementById("loginPassword").value.trim();
+    const formTitle = document.getElementById("form-title");
+    const submitBtn = document.getElementById("submit-btn");
+    const toggleLink = document.getElementById("toggle-link");
+    const usernameInput = document.getElementById("username");
 
-      const res = await fetch("/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (res.ok) {
-        window.location.href = "/";
+    toggleLink.addEventListener("click", () => {
+      isLogin = !isLogin;
+      if (isLogin) {
+        formTitle.textContent = "Login";
+        submitBtn.textContent = "Login";
+        toggleLink.textContent = "Sign up";
+        usernameInput.style.display = "none";
+        document.getElementById("toggle-text").innerHTML = "Don't have an account? <a href='#' id='toggle-link'>Sign up</a>";
       } else {
-        alert("Login failed.");
+        formTitle.textContent = "Sign Up";
+        submitBtn.textContent = "Sign up";
+        toggleLink.textContent = "Login";
+        usernameInput.style.display = "block";
+        document.getElementById("toggle-text").innerHTML = "Already have an account? <a href='#' id='toggle-link'>Login</a>";
       }
-    }
+    });
 
-    async function signup() {
-      const email = document.getElementById("signupEmail").value.trim();
-      const username = document.getElementById("signupUsername").value.trim();
-      const password = document.getElementById("signupPassword").value.trim();
+    document.getElementById("auth-container").addEventListener("click", e => {
+      if (e.target && e.target.id === "submit-btn") {
+        const email = document.getElementById("email").value;
+        const password = document.getElementById("password").value;
+        const username = document.getElementById("username").value;
 
-      const res = await fetch("/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ email, username, password }),
-      });
+        const endpoint = isLogin ? "/login" : "/signup";
+        const body = isLogin ? { email, password } : { email, password, username };
 
-      if (res.ok) {
-        alert("Signup successful! You can now log in.");
-        toggleForms();
-      } else {
-        const data = await res.json();
-        alert(data.error || "Signup failed.");
+        fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          credentials: "include",
+          body: JSON.stringify(body)
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            window.location.href = "/";
+          } else {
+            alert(data.error);
+          }
+        });
       }
-    }
+    });
   </script>
 </body>
 </html>
