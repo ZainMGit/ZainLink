@@ -1,5 +1,6 @@
 from flask import Flask, request, redirect, jsonify, send_file
 import string, random, sqlite3
+import requests
 from flask_cors import CORS
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -8,25 +9,24 @@ import os
 # --- Setup Flask ---
 app = Flask(__name__)
 app.config['SESSION_COOKIE_SAMESITE'] = "Lax"
-app.config['SESSION_COOKIE_SECURE'] = False  # Set to True if using HTTPS
-
+app.config['SESSION_COOKIE_SECURE'] = False
 app.secret_key = 'super-secret-zain-key'
 
-# --- Proper CORS configuration ---
+# --- Enable CORS ---
 CORS(app, supports_credentials=True)
 
-# --- Setup Login ---
+# --- Login Setup ---
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'serve_auth'
 
-# --- Connect to SQLite ---
+# --- SQLite Setup ---
 db_path = 'zainlink.db'
 first_time_setup = not os.path.exists(db_path)
 conn = sqlite3.connect(db_path, check_same_thread=False)
 cur = conn.cursor()
 
-# --- Migrate DB if needed ---
+# --- Migrate Existing DB ---
 if not first_time_setup:
     cur.execute("PRAGMA table_info(users)")
     existing_columns = [col[1] for col in cur.fetchall()]
@@ -65,6 +65,16 @@ class User(UserMixin):
         self.username = username
         self.is_admin = is_admin
 
+@login_manager.user_loader
+def load_user(user_id):
+    cur.execute("SELECT id, email, username, is_admin FROM users WHERE id = ?", (user_id,))
+    user = cur.fetchone()
+    if user:
+        return User(user[0], user[1], user[2], user[3])
+    return None
+
+# --- Routes ---
+
 @app.route('/api/user')
 @login_required
 def get_current_user():
@@ -75,15 +85,6 @@ def get_current_user():
         'is_admin': current_user.is_admin
     })
 
-@login_manager.user_loader
-def load_user(user_id):
-    cur.execute("SELECT id, email, username, is_admin FROM users WHERE id = ?", (user_id,))
-    user = cur.fetchone()
-    if user:
-        return User(user[0], user[1], user[2], user[3])
-    return None
-
-# --- Auth Routes ---
 @app.route('/auth')
 def serve_auth():
     return send_file('auth.html')
@@ -120,7 +121,6 @@ def logout():
     logout_user()
     return jsonify({'success': True})
 
-# --- Shortener ---
 def generate_short_code(length=6):
     charset = string.ascii_letters + string.digits
     while True:
@@ -129,31 +129,49 @@ def generate_short_code(length=6):
         if not cur.fetchone():
             return short
 
+# --- Shorten Route with reCAPTCHA ---
 @app.route('/shorten', methods=['POST'])
 @login_required
 def shorten():
     data = request.get_json()
     original = data.get('original')
     custom = data.get('custom')
+    captcha_response = data.get('captcha')
 
     if not original:
         return jsonify({"error": "Missing 'original' field"}), 400
 
-    cur.execute("SELECT short FROM urls WHERE original = ? AND user_id = ?", (original, current_user.id))
-    existing = cur.fetchone()
-    if existing:
-        return jsonify({"short": existing[0]})
+    if not captcha_response:
+        return jsonify({"error": "CAPTCHA token missing"}), 400
 
+    # --- Verify reCAPTCHA ---
+    verify_url = "https://www.google.com/recaptcha/api/siteverify"
+    payload = {
+        'secret': "6LcwdjorAAAAAELDENNnS67eGadx9WgThTLenekb",
+        'response': captcha_response
+    }
+    verify_res = requests.post(verify_url, data=payload)
+    verify_result = verify_res.json()
+
+    print("CAPTCHA verify result:", verify_result)  # Optional debug
+
+    if not verify_result.get("success"):
+        return jsonify({"error": "CAPTCHA verification failed"}), 400
+
+    # --- Generate short code ---
     short = custom or generate_short_code()
+    cur.execute("SELECT 1 FROM urls WHERE short = ?", (short,))
+    if cur.fetchone():
+        return jsonify({"error": "Short code already in use"}), 400
+
     try:
         cur.execute("INSERT INTO urls (short, original, user_id) VALUES (?, ?, ?)",
                     (short, original, current_user.id))
         conn.commit()
         return jsonify({"short": short})
     except sqlite3.IntegrityError:
-        return jsonify({"error": "Short code already in use"}), 400
+        return jsonify({"error": "Database error"}), 500
 
-# --- Redirect Shortlink ---
 @app.route('/<short_code>')
 def redirect_url(short_code):
     cur.execute("SELECT original FROM urls WHERE short = ?", (short_code,))
@@ -162,7 +180,6 @@ def redirect_url(short_code):
         return redirect(row[0])
     return "URL not found", 404
 
-# --- Dashboard & Pages ---
 @app.route('/')
 def homepage():
     return send_file('index.html')
@@ -193,10 +210,9 @@ def delete_link(short):
     conn.commit()
     return '', 204
 
-# --- Debug: Confirm Tables ---
+# --- Debug Tables ---
 cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
 print("Tables in DB:", cur.fetchall())
 
-# --- Run the app ---
 if __name__ == '__main__':
     app.run(debug=True)

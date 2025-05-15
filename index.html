@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ZainLink</title>
+  <link rel="icon" href="favicon.ico" type="image/x-icon" />
+  <script src="https://www.google.com/recaptcha/api.js" async defer></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -11,58 +13,15 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       min-height: 100vh;
       margin: 0;
+      padding-top: 2rem;
+      overflow-x: hidden;
     }
 
     h1 {
-      margin-bottom: 1rem;
-    }
-
-    form {
-      background: white;
-      padding: 1.5rem;
-      border-radius: 12px;
-      display: flex;
-      gap: 0.5rem;
-      box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
-    }
-
-    input {
-      padding: 0.8rem;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      font-size: 1rem;
-      width: 260px;
-    }
-
-    button {
-      padding: 0.8rem 1.2rem;
-      background-color: #5a45ef;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: bold;
-    }
-
-    #result {
-      margin-top: 1rem;
-      padding: 1rem;
-      border-radius: 8px;
-      font-size: 0.95rem;
-      max-width: 500px;
-    }
-
-    .success {
-      background-color: #e6ffed;
-      color: #1a7f37;
-    }
-
-    .error {
-      background-color: #e6f7ff;
-      color: #0077b6;
+      margin-bottom: 0.5rem;
     }
 
     .top-right {
@@ -81,6 +40,81 @@
       border-radius: 8px;
       font-weight: bold;
     }
+
+    .header-container {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .form-wrapper {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+      max-width: 95%;
+      width: 480px;
+    }
+
+    .form-wrapper input {
+      padding: 0.8rem;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 1rem;
+      flex-grow: 1;
+      min-width: 120px;
+    }
+
+    #original {
+      flex-basis: 65%;
+    }
+
+    #custom {
+      flex-basis: 33%;
+    }
+
+    .g-recaptcha {
+      flex-basis: 100%;
+      margin-top: 0.5rem;
+    }
+
+    button {
+      padding: 0.8rem 1.2rem;
+      background-color: #5a45ef;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      flex-basis: 100%;
+    }
+
+    #result {
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      max-width: 500px;
+      transition: opacity 0.3s ease;
+      opacity: 0;
+    }
+
+    #result.show {
+      opacity: 1;
+    }
+
+    .success {
+      background-color: #e6ffed;
+      color: #1a7f37;
+    }
+
+    .error {
+      background-color: #e6f7ff;
+      color: #0077b6;
+    }
   </style>
 </head>
 <body>
@@ -90,16 +124,19 @@
     <a href="#" id="logout-btn" style="display: none;">Logout</a>
   </div>
 
-  <div id="user-info" style="margin-top: 1rem; font-weight: bold;"></div>
-  <h1>ZainLink</h1>
+  <div class="header-container">
+    <h1>ZainLink</h1>
+    <div id="user-info" style="font-weight: bold;"></div>
+  </div>
 
-  <form id="shortenForm">
+  <form id="shortenForm" class="form-wrapper">
     <input type="text" id="original" placeholder="Paste your URL..." required />
     <input type="text" id="custom" placeholder="Custom short code (optional)" />
+    <div class="g-recaptcha" data-sitekey="6LcwdjorAAAAAP5ionfS4c5rWjTNfkNuNNAmuKEB"></div>
     <button type="submit">Shorten</button>
   </form>
 
-  <div id="result" style="display: none;"></div>
+  <div id="result"></div>
 
   <script>
     document.getElementById("shortenForm").addEventListener("submit", async function (e) {
@@ -108,10 +145,18 @@
       const original = document.getElementById("original").value.trim();
       const custom = document.getElementById("custom").value.trim();
       const resultBox = document.getElementById("result");
+      const captchaToken = grecaptcha.getResponse();
 
-      resultBox.style.display = "none";
+      resultBox.style.opacity = 0;
       resultBox.className = "";
       resultBox.innerText = "";
+
+      if (!captchaToken) {
+        resultBox.className = "error show";
+        resultBox.innerText = "Please complete the CAPTCHA.";
+        resultBox.style.opacity = 1;
+        return;
+      }
 
       try {
         const res = await fetch("/shorten", {
@@ -120,11 +165,13 @@
             "Content-Type": "application/json"
           },
           credentials: "include",
-          body: JSON.stringify({ original, custom })
+          body: JSON.stringify({ original, custom, captcha: captchaToken })
         });
 
         const contentType = res.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/json")) {
+        const isJson = contentType && contentType.includes("application/json");
+
+        if (!isJson) {
           throw new Error("You may not be logged in. Please log in first.");
         }
 
@@ -132,18 +179,25 @@
 
         if (res.ok) {
           const shortUrl = `${window.location.origin}/${data.short}`;
-          resultBox.className = "success";
+          resultBox.className = "success show";
           resultBox.innerHTML = `Shortened link: <a href="${shortUrl}" target="_blank">${shortUrl}</a>`;
+
+          // ✅ Clear fields
+          document.getElementById("original").value = "";
+          document.getElementById("custom").value = "";
+
+          // ✅ Reset CAPTCHA so user can shorten again
+          grecaptcha.reset();
         } else {
-          resultBox.className = "error";
+          resultBox.className = "error show";
           resultBox.innerText = `Error: ${data.error || "Something went wrong"}`;
         }
       } catch (err) {
-        resultBox.className = "error";
+        resultBox.className = "error show";
         resultBox.innerText = `Failed to shorten URL: ${err.message}`;
       }
 
-      resultBox.style.display = "block";
+      resultBox.style.opacity = 1;
     });
 
     async function fetchUser() {
@@ -155,8 +209,6 @@
           document.getElementById("login-btn").style.display = "none";
           document.getElementById("logout-btn").style.display = "inline-block";
           document.getElementById("dashboard-btn").style.display = "inline-block";
-        } else {
-          console.warn("Not logged in");
         }
       } catch (err) {
         console.error("Error fetching user", err);
