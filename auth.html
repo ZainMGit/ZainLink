@@ -89,7 +89,7 @@
   </div>
 
   <script>
-    const API_BASE = "https://zainlink.onrender.com";
+    const API_BASE = "https://zainlink.com";
     let isLogin = true;
 
     const formTitle = document.getElementById("form-title");
@@ -112,7 +112,6 @@
         toggleText.innerHTML = `Already have an account? <a href="#" id="toggle-link">Login</a>`;
       }
 
-      // Re-bind the toggle link
       document.getElementById("toggle-link").addEventListener("click", (e) => {
         e.preventDefault();
         isLogin = !isLogin;
@@ -154,10 +153,8 @@
       });
     });
 
-    // Wake backend
     fetch(`${API_BASE}/ping`);
 
-    // Initial toggle state binding
     toggleLink.addEventListener("click", (e) => {
       e.preventDefault();
       isLogin = !isLogin;
