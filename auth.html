@@ -65,16 +65,23 @@
       text-decoration: none;
       font-weight: bold;
     }
+    #status-message {
+      text-align: center;
+      margin-top: 1rem;
+      color: #d00000;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
   <div class="container" id="auth-container">
     <h2 id="form-title">Login</h2>
     <div class="input-wrapper">
-      <input type="email" id="email" placeholder="Email" />
-      <input type="password" id="password" placeholder="Password" />
+      <input type="email" id="email" placeholder="Email" required autofocus />
+      <input type="password" id="password" placeholder="Password" required />
       <input type="text" id="username" placeholder="Username" style="display:none" />
       <button id="submit-btn">Login</button>
+      <div id="status-message"></div>
     </div>
     <div class="toggle">
       <span id="toggle-text">Don't have an account? <a href="#" id="toggle-link">Sign up</a></span>
@@ -82,61 +89,55 @@
   </div>
 
   <script>
-    let isLogin = true;
     const API_BASE = "https://zainlink.onrender.com";
+    let isLogin = true;
 
     const formTitle = document.getElementById("form-title");
     const submitBtn = document.getElementById("submit-btn");
     const usernameInput = document.getElementById("username");
+    const toggleText = document.getElementById("toggle-text");
+    const toggleLink = document.getElementById("toggle-link");
+    const statusMsg = document.getElementById("status-message");
 
-    function toggleForm() {
-      isLogin = !isLogin;
+    function updateForm() {
       if (isLogin) {
         formTitle.textContent = "Login";
         submitBtn.textContent = "Login";
         usernameInput.style.display = "none";
-        document.getElementById("toggle-text").innerHTML =
-          `Don't have an account? <a href="#" id="toggle-link">Sign up</a>`;
+        toggleText.innerHTML = `Don't have an account? <a href="#" id="toggle-link">Sign up</a>`;
       } else {
         formTitle.textContent = "Sign Up";
         submitBtn.textContent = "Sign up";
         usernameInput.style.display = "block";
-        document.getElementById("toggle-text").innerHTML =
-          `Already have an account? <a href="#" id="toggle-link">Login</a>`;
+        toggleText.innerHTML = `Already have an account? <a href="#" id="toggle-link">Login</a>`;
       }
 
-      // Rebind toggle link
-      document.getElementById("toggle-link").addEventListener("click", function (e) {
+      // Re-bind the toggle link
+      document.getElementById("toggle-link").addEventListener("click", (e) => {
         e.preventDefault();
-        toggleForm();
+        isLogin = !isLogin;
+        updateForm();
+        statusMsg.textContent = "";
       });
     }
 
-    document.getElementById("toggle-link").addEventListener("click", function (e) {
-      e.preventDefault();
-      toggleForm();
-    });
-
-    document.getElementById("submit-btn").addEventListener("click", function () {
+    document.getElementById("submit-btn").addEventListener("click", () => {
       const email = document.getElementById("email").value.trim();
       const password = document.getElementById("password").value.trim();
       const username = document.getElementById("username").value.trim();
+      statusMsg.textContent = "";
 
       if (!email || !password || (!isLogin && !username)) {
-        alert("Please fill in all required fields.");
+        statusMsg.textContent = "Please fill in all required fields.";
         return;
       }
 
       const endpoint = isLogin ? `${API_BASE}/login` : `${API_BASE}/signup`;
-      const payload = isLogin
-        ? { email, password }
-        : { email, password, username };
+      const payload = isLogin ? { email, password } : { email, password, username };
 
       fetch(endpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify(payload)
       })
@@ -145,10 +146,22 @@
         if (data.success) {
           window.location.href = "/";
         } else {
-          alert(data.error || "Something went wrong.");
+          statusMsg.textContent = data.error || "Something went wrong.";
         }
       })
-      .catch(() => alert("Could not reach server."));
+      .catch(() => {
+        statusMsg.textContent = "Could not reach server.";
+      });
+    });
+
+    // Wake backend
+    fetch(`${API_BASE}/ping`);
+
+    // Initial toggle state binding
+    toggleLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      isLogin = !isLogin;
+      updateForm();
     });
   </script>
 </body>

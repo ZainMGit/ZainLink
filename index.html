@@ -139,6 +139,9 @@
   <div id="result"></div>
 
   <script>
+    const BACKEND_URL = "https://zainlink.onrender.com";
+    const FRONTEND_URL = "https://zainlink.com"; // hardcoded for reliable redirects
+
     document.getElementById("shortenForm").addEventListener("submit", async function (e) {
       e.preventDefault();
 
@@ -159,7 +162,7 @@
       }
 
       try {
-        const res = await fetch("https://zainlink.onrender.com/shorten", {
+        const res = await fetch(`${BACKEND_URL}/shorten`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
@@ -173,7 +176,7 @@
         const data = await res.json();
 
         if (res.ok) {
-          const shortUrl = `${window.location.origin}/${data.short}`;
+          const shortUrl = `${FRONTEND_URL}/${data.short}`;
           resultBox.className = "success show";
           resultBox.innerHTML = `Shortened link: <a href="${shortUrl}" target="_blank">${shortUrl}</a>`;
           document.getElementById("original").value = "";
@@ -193,7 +196,7 @@
 
     async function fetchUser() {
       try {
-        const res = await fetch("https://zainlink.onrender.com/api/user", { credentials: "include" });
+        const res = await fetch(`${BACKEND_URL}/api/user`, { credentials: "include" });
         if (res.ok) {
           const data = await res.json();
           document.getElementById("user-info").innerText = `Logged in as: ${data.username}`;
@@ -209,7 +212,7 @@
     document.getElementById("logout-btn").addEventListener("click", async function (e) {
       e.preventDefault();
       try {
-        const res = await fetch("https://zainlink.onrender.com/logout", {
+        const res = await fetch(`${BACKEND_URL}/logout`, {
           method: "GET",
           credentials: "include"
         });
@@ -223,6 +226,9 @@
         alert("Logout failed.");
       }
     });
+
+    // Wake up backend on page load
+    fetch(`${BACKEND_URL}/ping`);
 
     fetchUser();
   </script>

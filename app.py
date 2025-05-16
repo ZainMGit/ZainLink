@@ -1,8 +1,10 @@
 from flask import Flask, request, redirect, jsonify, send_file
-import string, random, sqlite3, requests, os
+import string, random, requests, os
 from flask_cors import CORS
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from pymongo import MongoClient
+from bson.objectid import ObjectId
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -23,41 +25,11 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'serve_auth'
 
-# --- SQLite Setup ---
-db_path = 'zainlink.db'
-first_time_setup = not os.path.exists(db_path)
-conn = sqlite3.connect(db_path, check_same_thread=False)
-cur = conn.cursor()
-
-# --- Migrate Existing DB ---
-if not first_time_setup:
-    cur.execute("PRAGMA table_info(users)")
-    existing_columns = [col[1] for col in cur.fetchall()]
-    if 'username' not in existing_columns:
-        cur.execute("ALTER TABLE users ADD COLUMN username TEXT NOT NULL DEFAULT 'user'")
-        conn.commit()
-
-# --- Create Tables ---
-cur.execute('''
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT UNIQUE NOT NULL,
-        username TEXT NOT NULL,
-        password TEXT NOT NULL,
-        is_admin BOOLEAN NOT NULL DEFAULT 0
-    )
-''')
-
-cur.execute('''
-    CREATE TABLE IF NOT EXISTS urls (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        short TEXT UNIQUE NOT NULL,
-        original TEXT NOT NULL,
-        user_id INTEGER,
-        FOREIGN KEY (user_id) REFERENCES users(id)
-    )
-''')
-conn.commit()
+# --- MongoDB Setup ---
+client = MongoClient(os.getenv("MONGO_URI"))
+db = client["zainlink"]
+users_col = db["users"]
+urls_col = db["urls"]
 
 # --- User Class ---
 class User(UserMixin):
@@ -69,10 +41,9 @@ class User(UserMixin):
 
 @login_manager.user_loader
 def load_user(user_id):
-    cur.execute("SELECT id, email, username, is_admin FROM users WHERE id = ?", (user_id,))
-    user = cur.fetchone()
+    user = users_col.find_one({"_id": ObjectId(user_id)})
     if user:
-        return User(user[0], user[1], user[2], user[3])
+        return User(str(user["_id"]), user["email"], user["username"], user.get("is_admin", False))
     return None
 
 # --- Utility to Generate Short Code ---
@@ -80,8 +51,7 @@ def generate_short_code(length=6):
     charset = string.ascii_letters + string.digits
     while True:
         short = ''.join(random.choices(charset, k=length))
-        cur.execute("SELECT 1 FROM urls WHERE short=?", (short,))
-        if not cur.fetchone():
+        if not urls_col.find_one({"short": short}):
             return short
 
 # --- Routes ---
@@ -109,13 +79,17 @@ def signup():
     if not email or not username or not password:
         return jsonify({'error': 'Missing fields'}), 400
 
-    hashed_pw = generate_password_hash(password)
-    try:
-        cur.execute("INSERT INTO users (email, username, password) VALUES (?, ?, ?)", (email, username, hashed_pw))
-        conn.commit()
-        return jsonify({'success': True})
-    except sqlite3.IntegrityError:
+    if users_col.find_one({"email": email}):
         return jsonify({'error': 'Email already exists'}), 400
+
+    hashed_pw = generate_password_hash(password)
+    users_col.insert_one({
+        "email": email,
+        "username": username,
+        "password": hashed_pw,
+        "is_admin": False
+    })
+    return jsonify({'success': True})
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -126,10 +100,9 @@ def login():
     if not email or not password:
         return jsonify({"error": "Missing email or password"}), 400
 
-    cur.execute("SELECT id, email, username, password, is_admin FROM users WHERE email = ?", (email,))
-    user = cur.fetchone()
-    if user and check_password_hash(user[3], password):
-        login_user(User(user[0], user[1], user[2], user[4]))
+    user = users_col.find_one({"email": email})
+    if user and check_password_hash(user["password"], password):
+        login_user(User(str(user["_id"]), user["email"], user["username"], user.get("is_admin", False)))
         return jsonify({'success': True})
     return jsonify({'error': 'Invalid credentials'}), 401
 
@@ -162,13 +135,14 @@ def shorten():
             return jsonify({"error": "CAPTCHA verification failed"}), 400
 
         short = custom or generate_short_code()
-        cur.execute("SELECT 1 FROM urls WHERE short = ?", (short,))
-        if cur.fetchone():
+        if urls_col.find_one({"short": short}):
             return jsonify({"error": "Short code already in use"}), 400
 
-        cur.execute("INSERT INTO urls (short, original, user_id) VALUES (?, ?, ?)",
-                    (short, original, current_user.id))
-        conn.commit()
+        urls_col.insert_one({
+            "short": short,
+            "original": original,
+            "user_id": ObjectId(current_user.id)
+        })
         return jsonify({"short": short})
 
     except Exception as e:
@@ -177,11 +151,29 @@ def shorten():
 
 @app.route('/<short_code>')
 def redirect_url(short_code):
-    cur.execute("SELECT original FROM urls WHERE short = ?", (short_code,))
-    row = cur.fetchone()
-    if row:
-        return redirect(row[0])
+    url = urls_col.find_one({"short": short_code})
+    if url:
+        original_url = url["original"]
+        return f'''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta http-equiv="refresh" content="0;url={original_url}" />
+            <script>
+                fetch("/ping", {{ method: "GET" }});
+                window.location.href = "{original_url}";
+            </script>
+        </head>
+        <body>
+            <p>Redirecting to <a href="{original_url}">{original_url}</a>...</p>
+        </body>
+        </html>
+        '''
     return "URL not found", 404
+
+@app.route('/ping')
+def ping():
+    return "pong", 200
 
 @app.route('/')
 def homepage():
@@ -196,26 +188,21 @@ def dashboard():
 @login_required
 def api_links():
     if current_user.is_admin:
-        cur.execute("SELECT short, original FROM urls")
+        urls = urls_col.find({})
     else:
-        cur.execute("SELECT short, original FROM urls WHERE user_id = ?", (current_user.id,))
-    rows = cur.fetchall()
-    links = [{'short': row[0], 'original': row[1]} for row in rows]
+        urls = urls_col.find({"user_id": ObjectId(current_user.id)})
+
+    links = [{'short': url['short'], 'original': url['original']} for url in urls]
     return jsonify({'links': links})
 
 @app.route('/delete/<short>', methods=['POST'])
 @login_required
 def delete_link(short):
     if current_user.is_admin:
-        cur.execute("DELETE FROM urls WHERE short = ?", (short,))
+        urls_col.delete_one({"short": short})
     else:
-        cur.execute("DELETE FROM urls WHERE short = ? AND user_id = ?", (short, current_user.id))
-    conn.commit()
+        urls_col.delete_one({"short": short, "user_id": ObjectId(current_user.id)})
     return '', 204
-
-# --- Debug Tables on Startup ---
-cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
-print("Tables in DB:", cur.fetchall())
 
 if __name__ == '__main__':
     app.run(debug=True)
