@@ -9,29 +9,38 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# --- Environment Variables ---
 RECAPTCHA_SECRET = os.getenv("RECAPTCHA_SECRET")
 MONGO_URI = os.getenv("MONGO_URI")
-SECRET_KEY = os.getenv("FLASK_SECRET_KEY")
+FLASK_SECRET_KEY = os.getenv("FLASK_SECRET_KEY")
 
+# --- Flask Setup ---
 app = Flask(__name__)
-app.secret_key = SECRET_KEY
-app.config['SESSION_COOKIE_SAMESITE'] = "None"
+app.secret_key = FLASK_SECRET_KEY
 app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = "None"
 
+# --- Redirect onrender.com to custom domain ---
+@app.before_request
+def enforce_domain():
+    if request.host != "zainlink.com":
+        return redirect(f"https://zainlink.com{request.full_path}", code=301)
+
+# --- CORS Setup ---
 CORS(app, origins=["https://zainlink.com"], supports_credentials=True)
 
-# Login manager
+# --- Login Setup ---
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'serve_auth'
 
-# MongoDB connection
+# --- MongoDB Setup ---
 client = MongoClient(MONGO_URI)
 db = client["zainlink"]
 users_col = db["users"]
 urls_col = db["urls"]
 
-# User class
+# --- User Class ---
 class User(UserMixin):
     def __init__(self, id_, email, username, is_admin):
         self.id = id_
@@ -45,10 +54,11 @@ def load_user(user_id):
         user = users_col.find_one({"_id": ObjectId(user_id)})
         if user:
             return User(str(user["_id"]), user["email"], user["username"], user.get("is_admin", False))
-    except Exception:
-        return None
+    except Exception as e:
+        print("Error loading user:", e)
     return None
 
+# --- Short Code Generator ---
 def generate_short_code(length=6):
     charset = string.ascii_letters + string.digits
     while True:
@@ -56,6 +66,7 @@ def generate_short_code(length=6):
         if not urls_col.find_one({"short": short}):
             return short
 
+# --- Routes ---
 @app.route('/api/user')
 @login_required
 def get_current_user():
@@ -94,7 +105,7 @@ def signup():
 
 @app.route('/login', methods=['POST'])
 def login():
-    data = request.get_json() or {}
+    data = request.get_json()
     email = data.get('email')
     password = data.get('password')
 
@@ -125,14 +136,12 @@ def shorten():
         if not original or not captcha_response:
             return jsonify({"error": "Missing URL or CAPTCHA"}), 400
 
-        # Verify CAPTCHA
-        verify_url = "https://www.google.com/recaptcha/api/siteverify"
-        verify_res = requests.post(verify_url, data={
-            'secret': RECAPTCHA_SECRET,
-            'response': captcha_response
-        })
-        result = verify_res.json()
-        if not result.get("success"):
+        verify_res = requests.post(
+            "https://www.google.com/recaptcha/api/siteverify",
+            data={'secret': RECAPTCHA_SECRET, 'response': captcha_response}
+        ).json()
+
+        if not verify_res.get("success"):
             return jsonify({"error": "CAPTCHA verification failed"}), 400
 
         short = custom or generate_short_code()
@@ -155,21 +164,17 @@ def redirect_url(short_code):
     url = urls_col.find_one({"short": short_code})
     if url:
         original_url = url["original"]
-        return f'''
-        <!DOCTYPE html>
+        return f"""
         <html>
         <head>
-            <meta http-equiv="refresh" content="0;url={original_url}" />
-            <script>
-                fetch("/ping", {{ method: "GET" }});
-                window.location.href = "{original_url}";
-            </script>
+            <meta http-equiv='refresh' content='0;url={original_url}' />
+            <script>window.location.href = '{original_url}';</script>
         </head>
         <body>
-            <p>Redirecting to <a href="{original_url}">{original_url}</a>...</p>
+            Redirecting to <a href="{original_url}">{original_url}</a>...
         </body>
         </html>
-        '''
+        """
     return "URL not found", 404
 
 @app.route('/ping')
@@ -196,7 +201,9 @@ def api_links():
 @app.route('/delete/<short>', methods=['POST'])
 @login_required
 def delete_link(short):
-    query = {"short": short} if current_user.is_admin else {"short": short, "user_id": ObjectId(current_user.id)}
+    query = {"short": short}
+    if not current_user.is_admin:
+        query["user_id"] = ObjectId(current_user.id)
     urls_col.delete_one(query)
     return '', 204
 
