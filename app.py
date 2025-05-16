@@ -23,8 +23,14 @@ app.config['SESSION_COOKIE_SAMESITE'] = "None"
 # --- Redirect onrender.com to custom domain ---
 @app.before_request
 def enforce_domain():
-    if request.host != "zainlink.com":
+    # Skip if running locally
+    if "localhost" in request.host or "127.0.0.1" in request.host:
+        return
+
+    # Redirect only if still on Render's default domain
+    if request.host.endswith("onrender.com"):
         return redirect(f"https://zainlink.com{request.full_path}", code=301)
+
 
 # --- CORS Setup ---
 CORS(app, origins=["https://zainlink.com"], supports_credentials=True)
