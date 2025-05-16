@@ -18,7 +18,8 @@ app.config['SESSION_COOKIE_SECURE'] = False
 app.secret_key = os.getenv("FLASK_SECRET_KEY")
 
 # --- Enable CORS ---
-CORS(app, supports_credentials=True)
+CORS(app, origins=["https://zainlink.com"], supports_credentials=True)
+
 
 # --- Login Setup ---
 login_manager = LoginManager()
