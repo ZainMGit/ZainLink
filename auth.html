@@ -115,12 +115,14 @@
 
     document.getElementById("auth-container").addEventListener("click", e => {
       if (e.target && e.target.id === "submit-btn") {
-        const email = document.getElementById("email").value;
-        const password = document.getElementById("password").value;
-        const username = document.getElementById("username").value;
+        const email = document.getElementById("email").value.trim();
+        const password = document.getElementById("password").value.trim();
+        const username = document.getElementById("username").value.trim();
 
         const endpoint = isLogin ? `${API_BASE}/login` : `${API_BASE}/signup`;
-        const body = isLogin ? { email, password } : { email, password, username };
+        const payload = isLogin
+          ? { email, password }
+          : { email, password, username };
 
         fetch(endpoint, {
           method: "POST",
@@ -128,17 +130,17 @@
             "Content-Type": "application/json"
           },
           credentials: "include",
-          body: JSON.stringify(body)
+          body: JSON.stringify(payload)
         })
         .then(res => res.json())
         .then(data => {
           if (data.success) {
             window.location.href = "/";
           } else {
-            alert(data.error || "Authentication failed.");
+            alert(data.error || "Something went wrong.");
           }
         })
-        .catch(() => alert("Unable to reach the server."));
+        .catch(() => alert("Could not reach server."));
       }
     });
   </script>

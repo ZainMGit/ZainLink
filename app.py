@@ -7,18 +7,15 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import os
 from dotenv import load_dotenv
 
-
 load_dotenv()
 
 RECAPTCHA_SECRET = os.getenv("RECAPTCHA_SECRET")
-
 
 # --- Setup Flask ---
 app = Flask(__name__)
 app.config['SESSION_COOKIE_SAMESITE'] = "Lax"
 app.config['SESSION_COOKIE_SECURE'] = False
 app.secret_key = os.getenv("FLASK_SECRET_KEY")
-
 
 # --- Enable CORS ---
 CORS(app, supports_credentials=True)
@@ -113,15 +110,26 @@ def signup():
 
 @app.route('/login', methods=['POST'])
 def login():
-    data = request.get_json()
-    email = data['email']
-    password = data['password']
-    cur.execute("SELECT id, email, username, password, is_admin FROM users WHERE email = ?", (email,))
-    user = cur.fetchone()
-    if user and check_password_hash(user[3], password):
-        login_user(User(user[0], user[1], user[2], user[4]))
-        return jsonify({'success': True})
-    return jsonify({'error': 'Invalid credentials'}), 401
+    try:
+        print("Raw login request data:", request.data)
+        data = request.get_json() or {}
+        print("Parsed login JSON:", data)
+
+        email = data.get('email')
+        password = data.get('password')
+
+        if not email or not password:
+            return jsonify({"error": "Missing email or password"}), 400
+
+        cur.execute("SELECT id, email, username, password, is_admin FROM users WHERE email = ?", (email,))
+        user = cur.fetchone()
+        if user and check_password_hash(user[3], password):
+            login_user(User(user[0], user[1], user[2], user[4]))
+            return jsonify({'success': True})
+        return jsonify({'error': 'Invalid credentials'}), 401
+    except Exception as e:
+        print("Error in login route:", e)
+        return jsonify({"error": "Server error"}), 500
 
 @app.route('/logout')
 @login_required
@@ -161,12 +169,11 @@ def shorten():
     verify_res = requests.post(verify_url, data=payload)
     verify_result = verify_res.json()
 
-    print("CAPTCHA verify result:", verify_result)  # Optional debug
+    print("CAPTCHA verify result:", verify_result)
 
     if not verify_result.get("success"):
         return jsonify({"error": "CAPTCHA verification failed"}), 400
 
-    # --- Generate short code ---
     short = custom or generate_short_code()
     cur.execute("SELECT 1 FROM urls WHERE short = ?", (short,))
     if cur.fetchone():
