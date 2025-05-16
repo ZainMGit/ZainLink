@@ -159,7 +159,7 @@
       }
 
       try {
-        const res = await fetch("/shorten", {
+        const res = await fetch("https://zainlink.onrender.com/login", {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
@@ -202,7 +202,7 @@
 
     async function fetchUser() {
       try {
-        const res = await fetch("/api/user", { credentials: "include" });
+        const res = await fetch("https://zainlink.onrender.com/login", { credentials: "include" });
         if (res.ok) {
           const data = await res.json();
           document.getElementById("user-info").innerText = `Logged in as: ${data.username}`;
@@ -218,7 +218,7 @@
     document.getElementById("logout-btn").addEventListener("click", async function (e) {
       e.preventDefault();
       try {
-        const res = await fetch("/logout", {
+        const res = await fetch("https://zainlink.onrender.com/login", {
           method: "GET",
           credentials: "include"
         });
