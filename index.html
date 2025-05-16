@@ -159,11 +159,9 @@
       }
 
       try {
-        const res = await fetch("https://zainlink.onrender.com/login", {
+        const res = await fetch("https://zainlink.onrender.com/shorten", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
+          headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({ original, custom, captcha: captchaToken })
         });
@@ -171,22 +169,15 @@
         const contentType = res.headers.get("content-type");
         const isJson = contentType && contentType.includes("application/json");
 
-        if (!isJson) {
-          throw new Error("You may not be logged in. Please log in first.");
-        }
-
+        if (!isJson) throw new Error("You may not be logged in. Please log in first.");
         const data = await res.json();
 
         if (res.ok) {
           const shortUrl = `${window.location.origin}/${data.short}`;
           resultBox.className = "success show";
           resultBox.innerHTML = `Shortened link: <a href="${shortUrl}" target="_blank">${shortUrl}</a>`;
-
-          // ✅ Clear fields
           document.getElementById("original").value = "";
           document.getElementById("custom").value = "";
-
-          // ✅ Reset CAPTCHA so user can shorten again
           grecaptcha.reset();
         } else {
           resultBox.className = "error show";
@@ -202,7 +193,7 @@
 
     async function fetchUser() {
       try {
-        const res = await fetch("https://zainlink.onrender.com/login", { credentials: "include" });
+        const res = await fetch("https://zainlink.onrender.com/api/user", { credentials: "include" });
         if (res.ok) {
           const data = await res.json();
           document.getElementById("user-info").innerText = `Logged in as: ${data.username}`;
@@ -218,7 +209,7 @@
     document.getElementById("logout-btn").addEventListener("click", async function (e) {
       e.preventDefault();
       try {
-        const res = await fetch("https://zainlink.onrender.com/login", {
+        const res = await fetch("https://zainlink.onrender.com/logout", {
           method: "GET",
           credentials: "include"
         });

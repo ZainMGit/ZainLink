@@ -95,13 +95,17 @@
         formTitle.textContent = "Login";
         submitBtn.textContent = "Login";
         usernameInput.style.display = "none";
-        document.getElementById("toggle-text").innerHTML = `Don't have an account? <a href="#" id="toggle-link">Sign up</a>`;
+        document.getElementById("toggle-text").innerHTML =
+          `Don't have an account? <a href="#" id="toggle-link">Sign up</a>`;
       } else {
         formTitle.textContent = "Sign Up";
         submitBtn.textContent = "Sign up";
         usernameInput.style.display = "block";
-        document.getElementById("toggle-text").innerHTML = `Already have an account? <a href="#" id="toggle-link">Login</a>`;
+        document.getElementById("toggle-text").innerHTML =
+          `Already have an account? <a href="#" id="toggle-link">Login</a>`;
       }
+
+      // Rebind toggle link
       document.getElementById("toggle-link").addEventListener("click", function (e) {
         e.preventDefault();
         toggleForm();
@@ -113,35 +117,38 @@
       toggleForm();
     });
 
-    document.getElementById("auth-container").addEventListener("click", e => {
-      if (e.target && e.target.id === "submit-btn") {
-        const email = document.getElementById("email").value.trim();
-        const password = document.getElementById("password").value.trim();
-        const username = document.getElementById("username").value.trim();
+    document.getElementById("submit-btn").addEventListener("click", function () {
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value.trim();
+      const username = document.getElementById("username").value.trim();
 
-        const endpoint = isLogin ? `${API_BASE}/login` : `${API_BASE}/signup`;
-        const payload = isLogin
-          ? { email, password }
-          : { email, password, username };
-
-        fetch(endpoint, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          credentials: "include",
-          body: JSON.stringify(payload)
-        })
-        .then(res => res.json())
-        .then(data => {
-          if (data.success) {
-            window.location.href = "/";
-          } else {
-            alert(data.error || "Something went wrong.");
-          }
-        })
-        .catch(() => alert("Could not reach server."));
+      if (!email || !password || (!isLogin && !username)) {
+        alert("Please fill in all required fields.");
+        return;
       }
+
+      const endpoint = isLogin ? `${API_BASE}/login` : `${API_BASE}/signup`;
+      const payload = isLogin
+        ? { email, password }
+        : { email, password, username };
+
+      fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        credentials: "include",
+        body: JSON.stringify(payload)
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          window.location.href = "/";
+        } else {
+          alert(data.error || "Something went wrong.");
+        }
+      })
+      .catch(() => alert("Could not reach server."));
     });
   </script>
 </body>
