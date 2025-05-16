@@ -10,28 +10,28 @@ from dotenv import load_dotenv
 load_dotenv()
 
 RECAPTCHA_SECRET = os.getenv("RECAPTCHA_SECRET")
+MONGO_URI = os.getenv("MONGO_URI")
+SECRET_KEY = os.getenv("FLASK_SECRET_KEY")
 
-# --- Setup Flask ---
 app = Flask(__name__)
+app.secret_key = SECRET_KEY
 app.config['SESSION_COOKIE_SAMESITE'] = "None"
 app.config['SESSION_COOKIE_SECURE'] = True
-app.secret_key = os.getenv("FLASK_SECRET_KEY")
 
-# --- Enable CORS ---
 CORS(app, origins=["https://zainlink.com"], supports_credentials=True)
 
-# --- Login Setup ---
+# Login manager
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'serve_auth'
 
-# --- MongoDB Setup ---
-client = MongoClient(os.getenv("MONGO_URI"))
+# MongoDB connection
+client = MongoClient(MONGO_URI)
 db = client["zainlink"]
 users_col = db["users"]
 urls_col = db["urls"]
 
-# --- User Class ---
+# User class
 class User(UserMixin):
     def __init__(self, id_, email, username, is_admin):
         self.id = id_
@@ -41,12 +41,14 @@ class User(UserMixin):
 
 @login_manager.user_loader
 def load_user(user_id):
-    user = users_col.find_one({"_id": ObjectId(user_id)})
-    if user:
-        return User(str(user["_id"]), user["email"], user["username"], user.get("is_admin", False))
+    try:
+        user = users_col.find_one({"_id": ObjectId(user_id)})
+        if user:
+            return User(str(user["_id"]), user["email"], user["username"], user.get("is_admin", False))
+    except Exception:
+        return None
     return None
 
-# --- Utility to Generate Short Code ---
 def generate_short_code(length=6):
     charset = string.ascii_letters + string.digits
     while True:
@@ -54,7 +56,6 @@ def generate_short_code(length=6):
         if not urls_col.find_one({"short": short}):
             return short
 
-# --- Routes ---
 @app.route('/api/user')
 @login_required
 def get_current_user():
@@ -187,21 +188,16 @@ def dashboard():
 @app.route('/api/links')
 @login_required
 def api_links():
-    if current_user.is_admin:
-        urls = urls_col.find({})
-    else:
-        urls = urls_col.find({"user_id": ObjectId(current_user.id)})
-
+    query = {} if current_user.is_admin else {"user_id": ObjectId(current_user.id)}
+    urls = urls_col.find(query)
     links = [{'short': url['short'], 'original': url['original']} for url in urls]
     return jsonify({'links': links})
 
 @app.route('/delete/<short>', methods=['POST'])
 @login_required
 def delete_link(short):
-    if current_user.is_admin:
-        urls_col.delete_one({"short": short})
-    else:
-        urls_col.delete_one({"short": short, "user_id": ObjectId(current_user.id)})
+    query = {"short": short} if current_user.is_admin else {"short": short, "user_id": ObjectId(current_user.id)}
+    urls_col.delete_one(query)
     return '', 204
 
 if __name__ == '__main__':
