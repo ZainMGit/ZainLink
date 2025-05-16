@@ -1,5 +1,5 @@
 from flask import Flask, request, redirect, jsonify, send_file
-import string, random, sqlite3, os, requests
+import string, random, sqlite3, requests, os
 from flask_cors import CORS
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -7,17 +7,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# --- Environment ---
 RECAPTCHA_SECRET = os.getenv("RECAPTCHA_SECRET")
-FLASK_SECRET_KEY = os.getenv("FLASK_SECRET_KEY")
 
 # --- Setup Flask ---
 app = Flask(__name__)
 app.config['SESSION_COOKIE_SAMESITE'] = "None"
 app.config['SESSION_COOKIE_SECURE'] = True
-app.secret_key = FLASK_SECRET_KEY
+app.secret_key = os.getenv("FLASK_SECRET_KEY")
 
-# --- CORS ---
+# --- Enable CORS ---
 CORS(app, origins=["https://zainlink.com"], supports_credentials=True)
 
 # --- Login Setup ---
@@ -31,10 +29,11 @@ first_time_setup = not os.path.exists(db_path)
 conn = sqlite3.connect(db_path, check_same_thread=False)
 cur = conn.cursor()
 
-# --- Migrate DB ---
+# --- Migrate Existing DB ---
 if not first_time_setup:
     cur.execute("PRAGMA table_info(users)")
-    if 'username' not in [col[1] for col in cur.fetchall()]:
+    existing_columns = [col[1] for col in cur.fetchall()]
+    if 'username' not in existing_columns:
         cur.execute("ALTER TABLE users ADD COLUMN username TEXT NOT NULL DEFAULT 'user'")
         conn.commit()
 
@@ -71,86 +70,68 @@ class User(UserMixin):
 @login_manager.user_loader
 def load_user(user_id):
     cur.execute("SELECT id, email, username, is_admin FROM users WHERE id = ?", (user_id,))
-    row = cur.fetchone()
-    if row:
-        return User(*row)
+    user = cur.fetchone()
+    if user:
+        return User(user[0], user[1], user[2], user[3])
     return None
 
+# --- Utility to Generate Short Code ---
+def generate_short_code(length=6):
+    charset = string.ascii_letters + string.digits
+    while True:
+        short = ''.join(random.choices(charset, k=length))
+        cur.execute("SELECT 1 FROM urls WHERE short=?", (short,))
+        if not cur.fetchone():
+            return short
+
 # --- Routes ---
+@app.route('/api/user')
+@login_required
+def get_current_user():
+    return jsonify({
+        'id': current_user.id,
+        'email': current_user.email,
+        'username': current_user.username,
+        'is_admin': current_user.is_admin
+    })
 
 @app.route('/auth')
 def serve_auth():
     return send_file('auth.html')
 
-@app.route('/')
-def homepage():
-    return send_file('index.html')
-
-@app.route('/dashboard')
-@login_required
-def dashboard():
-    return send_file('dashboard.html')
-
-@app.route('/api/user')
-def get_current_user():
-    if current_user.is_authenticated:
-        return jsonify({
-            'id': current_user.id,
-            'email': current_user.email,
-            'username': current_user.username,
-            'is_admin': current_user.is_admin
-        })
-    return jsonify({'error': 'Not logged in'}), 401
-
 @app.route('/signup', methods=['POST'])
 def signup():
+    data = request.get_json()
+    email = data.get('email')
+    username = data.get('username')
+    password = data.get('password')
+
+    if not email or not username or not password:
+        return jsonify({'error': 'Missing fields'}), 400
+
+    hashed_pw = generate_password_hash(password)
     try:
-        data = request.get_json()
-        email = data.get('email')
-        username = data.get('username')
-        password = data.get('password')
-
-        if not email or not username or not password:
-            return jsonify({'error': 'All fields are required'}), 400
-
-        hashed_pw = generate_password_hash(password)
-        cur.execute("INSERT INTO users (email, username, password) VALUES (?, ?, ?)",
-                    (email, username, hashed_pw))
+        cur.execute("INSERT INTO users (email, username, password) VALUES (?, ?, ?)", (email, username, hashed_pw))
         conn.commit()
-
-        # Log the user in after successful signup
-        cur.execute("SELECT id FROM users WHERE email = ?", (email,))
-        uid = cur.fetchone()[0]
-        login_user(User(uid, email, username, is_admin=False))
-
         return jsonify({'success': True})
-
     except sqlite3.IntegrityError:
         return jsonify({'error': 'Email already exists'}), 400
-    except Exception as e:
-        print("Signup error:", e)
-        return jsonify({'error': 'Server error'}), 500
 
 @app.route('/login', methods=['POST'])
 def login():
-    try:
-        data = request.get_json()
-        email = data.get('email')
-        password = data.get('password')
+    data = request.get_json() or {}
+    email = data.get('email')
+    password = data.get('password')
 
-        if not email or not password:
-            return jsonify({"error": "Missing email or password"}), 400
+    if not email or not password:
+        return jsonify({"error": "Missing email or password"}), 400
 
-        cur.execute("SELECT id, email, username, password, is_admin FROM users WHERE email = ?", (email,))
-        user = cur.fetchone()
-        if user and check_password_hash(user[3], password):
-            login_user(User(user[0], user[1], user[2], user[4]))
-            return jsonify({'success': True})
-
-        return jsonify({'error': 'Invalid credentials'}), 401
-    except Exception as e:
-        print("Login error:", e)
-        return jsonify({'error': 'Server error'}), 500
+    cur.execute("SELECT id, email, username, password, is_admin FROM users WHERE email = ?", (email,))
+    user = cur.fetchone()
+    if user and check_password_hash(user[3], password):
+        login_user(User(user[0], user[1], user[2], user[4]))
+        return jsonify({'success': True})
+    return jsonify({'error': 'Invalid credentials'}), 401
 
 @app.route('/logout')
 @login_required
@@ -167,21 +148,19 @@ def shorten():
         custom = data.get('custom')
         captcha_response = data.get('captcha')
 
-        if not original:
-            return jsonify({"error": "Missing 'original' field"}), 400
+        if not original or not captcha_response:
+            return jsonify({"error": "Missing URL or CAPTCHA"}), 400
 
-        if not captcha_response:
-            return jsonify({"error": "CAPTCHA token missing"}), 400
-
-        # --- Verify reCAPTCHA ---
-        res = requests.post("https://www.google.com/recaptcha/api/siteverify", data={
+        # Verify CAPTCHA
+        verify_url = "https://www.google.com/recaptcha/api/siteverify"
+        verify_res = requests.post(verify_url, data={
             'secret': RECAPTCHA_SECRET,
             'response': captcha_response
         })
-        if not res.json().get("success"):
+        result = verify_res.json()
+        if not result.get("success"):
             return jsonify({"error": "CAPTCHA verification failed"}), 400
 
-        # --- Generate or check short code ---
         short = custom or generate_short_code()
         cur.execute("SELECT 1 FROM urls WHERE short = ?", (short,))
         if cur.fetchone():
@@ -191,6 +170,7 @@ def shorten():
                     (short, original, current_user.id))
         conn.commit()
         return jsonify({"short": short})
+
     except Exception as e:
         print("Shorten error:", e)
         return jsonify({"error": "Server error"}), 500
@@ -203,6 +183,15 @@ def redirect_url(short_code):
         return redirect(row[0])
     return "URL not found", 404
 
+@app.route('/')
+def homepage():
+    return send_file('index.html')
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    return send_file('dashboard.html')
+
 @app.route('/api/links')
 @login_required
 def api_links():
@@ -210,7 +199,8 @@ def api_links():
         cur.execute("SELECT short, original FROM urls")
     else:
         cur.execute("SELECT short, original FROM urls WHERE user_id = ?", (current_user.id,))
-    links = [{'short': s, 'original': o} for s, o in cur.fetchall()]
+    rows = cur.fetchall()
+    links = [{'short': row[0], 'original': row[1]} for row in rows]
     return jsonify({'links': links})
 
 @app.route('/delete/<short>', methods=['POST'])
@@ -223,7 +213,7 @@ def delete_link(short):
     conn.commit()
     return '', 204
 
-# --- Debug log ---
+# --- Debug Tables on Startup ---
 cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
 print("Tables in DB:", cur.fetchall())
 
