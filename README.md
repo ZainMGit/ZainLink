@@ -1,5 +1,3 @@
-![image](https://github.com/user-attachments/assets/848d88c8-016b-4989-ad3f-23c45267fabe)# 🔗 ZainLink — URL Shortener with User Auth, Admin Panel, and Analytics
-
 https://zainlink.com/
 
 ZainLink is a URL shortener built with Flask, MongoDB, and HTML. Users can sign up, shorten URLs, and manage their shortened links from a dashboard.
