@@ -33,6 +33,7 @@ ZainLink is a URL shortener built with Flask, MongoDB, and HTML. Users can sign 
 ---
 
 ## 📦 Installation
+Create a `.env` file with these variables:
 
 - `RECAPTCHA_SECRET` – Google reCAPTCHA v2 secret key
 - `FLASK_SECRET_KEY` – A secret key used to sign session cookies
