@@ -3,7 +3,7 @@ import string, random, requests, os
 from flask_cors import CORS
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from pymongo import MongoClient
+from pymongo import MongoClient, ReturnDocument
 from bson.objectid import ObjectId
 from dotenv import load_dotenv
 
@@ -157,7 +157,8 @@ def shorten():
         urls_col.insert_one({
             "short": short,
             "original": original,
-            "user_id": ObjectId(current_user.id)
+            "user_id": ObjectId(current_user.id),
+            "views": 0
         })
         return jsonify({"short": short})
 
@@ -167,7 +168,11 @@ def shorten():
 
 @app.route('/<short_code>')
 def redirect_url(short_code):
-    url = urls_col.find_one({"short": short_code})
+    url = urls_col.find_one_and_update(
+        {"short": short_code},
+        {"$inc": {"views": 1}},
+        return_document=ReturnDocument.AFTER
+    )
     if url:
         original_url = url["original"]
         return f"""
@@ -201,7 +206,14 @@ def dashboard():
 def api_links():
     query = {} if current_user.is_admin else {"user_id": ObjectId(current_user.id)}
     urls = urls_col.find(query)
-    links = [{'short': url['short'], 'original': url['original']} for url in urls]
+    links = [
+        {
+            'short': url['short'],
+            'original': url['original'],
+            'views': url.get('views', 0)
+        }
+        for url in urls
+    ]
     return jsonify({'links': links})
 
 @app.route('/delete/<short>', methods=['POST'])
