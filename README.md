@@ -4,25 +4,25 @@ ZainLink is a URL shortener built with Flask, MongoDB, and HTML. Users can sign 
 
 ---
 
-## 🚀 Features
+##  Features
 
-- ✅ User Signup / Login / Logout 
-- 🔒 CAPTCHA protection with Google reCAPTCHA 
-- 🧾 Custom or random short links
-- 📊 Google Analytics integration 
+-  User Signup / Login / Logout 
+-  CAPTCHA protection with Google reCAPTCHA 
+- Custom or random short links
+-  Google Analytics integration 
 
 
-- 🛠 An admin account which can:
+-  An admin account which can:
   - View all shortened links
   - Delete any user’s link
-- 👤 Users can:
+- Users can:
   - View only their links
   - Delete their own links
 
 
 ---
 
-## 🧰 Tech Stack
+## Tech Stack
 
 - Backend: Flask +  PyMongo
 - Database: MongoDB 
@@ -32,7 +32,7 @@ ZainLink is a URL shortener built with Flask, MongoDB, and HTML. Users can sign 
 
 ---
 
-## 📦 Installation
+## Installation
 Create a `.env` file with these variables:
 
 - `RECAPTCHA_SECRET` – Google reCAPTCHA v2 secret key
